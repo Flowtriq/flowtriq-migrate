@@ -1,0 +1,38 @@
+{
+  "interfaces": ["ens3"],
+  "ban_for_pps": 100000,
+  "ban_for_bandwidth": 5000,
+  "ban_for_flows": 10000,
+  "enable_ban": true,
+  "ban_time": 7200,
+  "mirror": false,
+  "sflow": true,
+  "sflow_port": 6343,
+  "netflow": false,
+  "networks_list": "/etc/networks_list",
+  "notify_script_path": "/usr/local/bin/notify_about_attack.sh",
+  "exabgp": {
+    "enabled": true,
+    "community": "65001:999",
+    "next_hop": "10.0.0.1",
+    "announce_host": "127.0.0.1",
+    "announce_port": 5555
+  },
+  "hostgroups": {
+    "web_servers": { "threshold_pps": 50000 },
+    "game_servers": { "threshold_pps": 200000 }
+  },
+  "email": {
+    "enabled": true,
+    "from_address": "noc@example.com",
+    "to_address": "alerts@example.com",
+    "smtp_host": "smtp.example.com",
+    "port": 587
+  },
+  "influxdb": {
+    "enabled": true,
+    "host": "influx.internal",
+    "port": 8086,
+    "database": "fastnetmon"
+  }
+}

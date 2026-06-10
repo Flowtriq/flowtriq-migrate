@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flowtriq-migrate"
+version = "1.0.0"
+description = "Migrate from FastNetMon to Flowtriq in under 5 minutes"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Flowtriq", email = "hello@flowtriq.com" }]
+keywords = [
+    "ddos", "fastnetmon", "flowtriq", "migration", "network",
+    "monitoring", "security", "config", "converter",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking :: Monitoring",
+    "Topic :: Security",
+    "Topic :: Utilities",
+]
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+flowtriq-migrate = "flowtriq_migrate.cli:main"
+
+[project.urls]
+Homepage      = "https://flowtriq.com"
+Repository    = "https://github.com/flowtriq/flowtriq-migrate"
+Documentation = "https://flowtriq.com/tools/ddos-config-converter"
+"Bug Tracker" = "https://github.com/flowtriq/flowtriq-migrate/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["flowtriq_migrate*"]
