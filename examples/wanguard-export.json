@@ -1,0 +1,35 @@
+{
+  "vendor": "wanguard",
+  "sensors": [
+    {"type": "netflow", "interface": "eth0", "port": 2055},
+    {"type": "sflow", "interface": "eth1", "port": 6343}
+  ],
+  "thresholds": {
+    "pps": 100000,
+    "mbps": 5000
+  },
+  "networks": ["10.0.0.0/24", "172.16.0.0/16", "192.168.0.0/16"],
+  "anomaly_profiles": [
+    {"name": "default", "threshold_pps": 100000, "threshold_mbps": 5000},
+    {"name": "dns-servers", "threshold_pps": 200000}
+  ],
+  "bgp": {
+    "enabled": true,
+    "community": "65001:666",
+    "next_hop": "192.0.2.1",
+    "peer": "10.0.0.1",
+    "port": 5555
+  },
+  "alerts": {
+    "email": "noc@example.com",
+    "smtp": "smtp.example.com",
+    "snmp_trap": "10.0.0.50",
+    "snmp_community": "private",
+    "script": "/usr/local/bin/wanguard-notify.sh"
+  },
+  "filter": {
+    "enabled": true,
+    "type": "flowspec",
+    "ban_time": 3600
+  }
+}

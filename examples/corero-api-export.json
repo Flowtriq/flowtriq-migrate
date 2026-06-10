@@ -1,0 +1,43 @@
+{
+  "vendor": "corero",
+  "deployment_mode": "inline",
+  "interfaces": ["eth0", "eth1"],
+  "protection_profiles": [
+    {
+      "name": "web-servers",
+      "smart_rules": [
+        {"type": "service", "protocol": "tcp", "port": 80, "threshold_pps": 100000, "rate_limit_pps": 50000, "action": "rate-limit"},
+        {"type": "service", "protocol": "tcp", "port": 443, "threshold_pps": 100000, "rate_limit_pps": 50000, "action": "rate-limit"},
+        {"type": "service", "protocol": "udp", "threshold_pps": 50000, "action": "drop"},
+        {"type": "reflection", "protocol": "udp", "port": 53, "threshold_pps": 30000, "action": "drop"},
+        {"type": "reflection", "protocol": "udp", "port": 123, "threshold_pps": 20000, "action": "drop"}
+      ]
+    },
+    {
+      "name": "dns-infra",
+      "smart_rules": [
+        {"type": "service", "protocol": "udp", "port": 53, "threshold_pps": 200000, "action": "rate-limit", "rate_limit_pps": 100000},
+        {"type": "service", "protocol": "tcp", "threshold_pps": 50000, "action": "drop"}
+      ]
+    }
+  ],
+  "managed_objects": [
+    {"name": "Web Frontend", "prefixes": ["10.0.0.0/24", "10.0.1.0/24"], "profile": "web-servers"},
+    {"name": "DNS Cluster", "prefixes": ["10.0.10.0/24"], "profile": "dns-infra"},
+    {"name": "API Servers", "prefixes": ["10.0.20.0/24"], "profile": "web-servers"}
+  ],
+  "bgp": {
+    "enabled": true,
+    "type": "flowspec",
+    "community": "65001:999",
+    "next_hop": "10.0.0.1",
+    "peer": "10.0.0.254",
+    "port": 179
+  },
+  "alerts": {
+    "syslog": {"enabled": true, "host": "siem.example.com", "port": 514},
+    "snmp": {"enabled": true, "host": "monitoring.example.com", "community": "ddos-alerts"},
+    "email": "noc@example.com",
+    "webhook": "https://hooks.slack.com/services/T00000/B00000/XXXXXX"
+  }
+}

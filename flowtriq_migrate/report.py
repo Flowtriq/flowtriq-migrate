@@ -40,12 +40,19 @@ def format_report(
         bolt = "*"
         bullet = "-"
 
-    edition = parsed.get("edition", "unknown").title()
+    edition = parsed.get("edition", "unknown")
+    edition_labels = {
+        "community": "FastNetMon Community",
+        "advanced": "FastNetMon Advanced",
+        "wanguard": "Wanguard (Andrisoft)",
+        "corero": "Corero SmartWall",
+    }
+    edition_label = edition_labels.get(edition, edition.title())
     lines = [
         "",
         bar,
         "  Flowtriq Migration Report",
-        f"  Source: {source_path} ({edition} Edition)",
+        f"  Source: {source_path} ({edition_label})",
         bar,
         "",
     ]
@@ -91,7 +98,7 @@ def format_report(
         lines.append("")
 
     # New in Flowtriq
-    lines.append(f"  {bolt} NEW IN FLOWTRIQ (not available in FastNetMon)")
+    lines.append(f"  {bolt} NEW IN FLOWTRIQ (advantages over {edition_label})")
     gains = [
         "Sub-second attack detection (vs 30-60s with flow sampling)",
         "L7 application-layer DDoS detection (HTTP floods, DNS amplification)",

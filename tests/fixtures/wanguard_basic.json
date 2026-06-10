@@ -1,0 +1,27 @@
+{
+  "vendor": "wanguard",
+  "sensors": [
+    {"type": "netflow", "interface": "eth0", "port": 2055}
+  ],
+  "thresholds": {
+    "pps": 100000,
+    "mbps": 5000
+  },
+  "networks": ["10.0.0.0/24", "172.16.0.0/16"],
+  "bgp": {
+    "enabled": true,
+    "community": "65001:666",
+    "next_hop": "192.0.2.1",
+    "peer": "10.0.0.1"
+  },
+  "alerts": {
+    "email": "noc@example.com",
+    "snmp_trap": "10.0.0.50",
+    "snmp_community": "public"
+  },
+  "filter": {
+    "enabled": true,
+    "type": "flowspec"
+  },
+  "ban_time": 1800
+}

@@ -1,24 +1,36 @@
 # flowtriq-migrate
 
-**Migrate from FastNetMon to Flowtriq in under 5 minutes.**
+**Migrate to Flowtriq from FastNetMon, Wanguard, or Corero in under 5 minutes.**
 
-`flowtriq-migrate` reads your existing FastNetMon configuration (Community or Advanced) and generates a working [Flowtriq](https://flowtriq.com) agent config. Every threshold, every network definition, every collection method -- mapped automatically.
+`flowtriq-migrate` reads your existing DDoS platform configuration and generates a working [Flowtriq](https://flowtriq.com) agent config. Every threshold, every network definition, every collection method -- mapped automatically.
+
+Supports **FastNetMon** (Community and Advanced), **Andrisoft Wanguard**, and **Corero SmartWall**.
 
 Zero dependencies. Works with Python 3.8+.
 
 ## Quick Start
 
 ```bash
-pip install flowtriq-migrate
+git clone https://github.com/flowtriq/flowtriq-migrate.git
+cd flowtriq-migrate
 
-flowtriq-migrate /etc/fastnetmon.conf -o /etc/ftagent/config.json
+# FastNetMon
+python3 -m flowtriq_migrate /etc/fastnetmon.conf -o /etc/ftagent/config.json
+
+# Wanguard (JSON export from Console)
+python3 -m flowtriq_migrate wanguard-export.json --vendor wanguard
+
+# Corero SmartWall (REST API export)
+python3 -m flowtriq_migrate corero-api-export.json --vendor corero
 ```
 
 Done. Install the Flowtriq agent, paste in your API key, and you're live.
 
 ## What Gets Migrated
 
-| FastNetMon Setting | Flowtriq Equivalent | Auto-migrated? |
+### FastNetMon
+
+| Setting | Flowtriq Equivalent | Auto-migrated? |
 |---|---|---|
 | `interfaces` | `interface` | Yes |
 | `mirror` + `mirror_afpacket` | `mirror_mode` + `mirror_capture_mode` | Yes |
@@ -26,101 +38,101 @@ Done. Install the Flowtriq agent, paste in your API key, and you're live.
 | `netflow` + `netflow_port` | `flow_enabled` + `flow_protocol` + `flow_port` | Yes |
 | `networks_list` | `mirror_subnets` | Yes (mirror mode) |
 | `ban_for_pps` / `threshold_pps` | `dynamic_threshold` (adaptive baseline) | Mapped with guidance |
-| `ban_for_bandwidth` | `dynamic_threshold` (adaptive baseline) | Mapped with guidance |
 | `enable_ban` / `ban_time` | Auto-mitigation rules | Dashboard setup guide |
 | `notify_script_path` | Alert channels (12+ options) | Dashboard setup guide |
 | `exabgp` / `gobgp` config | BGP adapter (FlowSpec/RTBH) | Dashboard setup guide |
-| Per-host thresholds | Per-node agents with independent baselines | Dashboard setup guide |
 
-## Feature Comparison: FastNetMon vs Flowtriq
+### Wanguard (Andrisoft)
 
-| Capability | FastNetMon Community | FastNetMon Advanced | Flowtriq |
-|---|---|---|---|
-| Detection source | NetFlow/sFlow sampling | NetFlow/sFlow sampling | Per-packet at kernel level |
-| Detection latency | 30-60 seconds | 30-60 seconds | Sub-second |
-| L7 detection (HTTP floods) | No | No | Yes |
-| Attack classification | Protocol only (UDP/TCP) | Protocol only | 8+ attack families with confidence scores |
-| PCAP forensics | No | No | Automatic pre-attack capture |
-| Alert channels | Custom shell script | Script + email + Slack | 12+ native (Slack, Discord, PagerDuty, email, SMS, ...) |
-| Dashboard | None | LiveView ($70/user/mo) | Included (unlimited users) |
-| Per-host thresholds | No | Yes (manual) | Yes (automatic baselines) |
-| BGP FlowSpec | No | Yes | Yes |
-| XDP/eBPF mitigation | No | No | Yes |
-| API access | No | REST (extra cost) | Full REST API included |
-| Pricing | Free (limited) | $115+/month + server | $9.99/node/month |
+| Setting | Flowtriq Equivalent | Auto-migrated? |
+|---|---|---|
+| Sensor type (NetFlow/sFlow/packet) | `flow_enabled` + `flow_protocol` | Yes |
+| Sensor interface + port | `interface` + `flow_port` | Yes |
+| Threshold PPS/Mbps | `dynamic_threshold` (adaptive baseline) | Mapped with guidance |
+| Anomaly profiles | Per-node adaptive baselines | Mapped with guidance |
+| Filter type (FlowSpec/RTBH) | Auto-mitigation rules | Dashboard setup guide |
+| SNMP traps / email / scripts | Alert channels (12+ options) | Dashboard setup guide |
+| BGP community + next-hop | BGP adapter config | Dashboard setup guide |
+| Networks / subnets | `mirror_subnets` or agent mode | Yes |
+
+### Corero SmartWall
+
+| Setting | Flowtriq Equivalent | Auto-migrated? |
+|---|---|---|
+| Interfaces | `interface` | Yes |
+| Protection profiles | Per-node adaptive baselines | Mapped with guidance |
+| Smart-Rules (thresholds) | `dynamic_threshold` (adaptive baseline) | Mapped with guidance |
+| Managed objects (prefixes) | Agent deployments per subnet | Mapped with guidance |
+| BGP RTBH / FlowSpec | BGP adapter config | Dashboard setup guide |
+| Syslog / SNMP / webhook alerts | Alert channels (12+ options) | Dashboard setup guide |
+| Deployment mode (inline/OOB) | Per-server agent mode | Guidance provided |
+
+## Feature Comparison
+
+| Capability | FastNetMon | Wanguard | Corero SmartWall | Flowtriq |
+|---|---|---|---|---|
+| Detection source | NetFlow/sFlow | NetFlow/sFlow/PF_RING | Inline hardware | Per-packet at kernel level |
+| Detection latency | 30-60 seconds | 10-60 seconds | Sub-second (inline) | Sub-second |
+| L7 detection | No | No | Limited | Yes (HTTP floods, DNS) |
+| Attack classification | Protocol only | Protocol only | Rule-based | 8+ families with confidence |
+| PCAP forensics | No | No | No | Automatic pre-attack capture |
+| Alert channels | Script / email | Email / SNMP / script | Syslog / SNMP / webhook | 12+ native channels |
+| Dashboard | None / LiveView | Web Console | CMS Web UI | Included (unlimited users) |
+| Per-host thresholds | Advanced only | Per-sensor | Per-managed-object | Automatic per-server baselines |
+| BGP FlowSpec | Advanced only | Yes | Yes | Yes |
+| XDP/eBPF mitigation | No | No | No | Yes |
+| Hardware required | Server | Server | Dedicated appliance | No (runs on existing servers) |
+| Pricing | Free / $115+/mo | $1,500+/yr | $10K+/appliance | $9.99/node/month |
 
 ## Installation
 
-**pip (recommended):**
-```bash
-pip install flowtriq-migrate
-```
-
-**pipx (isolated install):**
-```bash
-pipx install flowtriq-migrate
-```
-
-**From source:**
 ```bash
 git clone https://github.com/flowtriq/flowtriq-migrate.git
 cd flowtriq-migrate
-pip install .
 ```
 
-**No install (run directly):**
-```bash
-git clone https://github.com/flowtriq/flowtriq-migrate.git
-cd flowtriq-migrate
-python3 -m flowtriq_migrate /etc/fastnetmon.conf --dry-run
-```
+No dependencies. Runs with Python 3.8+ out of the box.
 
 ## Usage
 
-### Basic migration
+### FastNetMon
 
 ```bash
-flowtriq-migrate /etc/fastnetmon.conf
+python3 -m flowtriq_migrate /etc/fastnetmon.conf
+python3 -m flowtriq_migrate /etc/fastnetmon.conf -o /etc/ftagent/config.json
+python3 -m flowtriq_migrate fastnetmon-advanced.json  # Advanced edition auto-detected
 ```
 
-Generates `config.json` in the current directory with a migration report.
+### Wanguard
 
-### Specify output path
+Export your settings from Wanguard Console into a JSON file (see `examples/wanguard-export.json` for the format), then:
 
 ```bash
-flowtriq-migrate /etc/fastnetmon.conf -o /etc/ftagent/config.json
+python3 -m flowtriq_migrate wanguard-export.json --vendor wanguard
 ```
 
-### Pre-fill credentials
+### Corero SmartWall
+
+Export your protection profiles and managed objects from the CMS REST API (see `examples/corero-api-export.json` for the format), then:
 
 ```bash
-flowtriq-migrate /etc/fastnetmon.conf \
-  --api-key "your-api-key" \
-  --node-uuid "your-node-uuid" \
-  -o /etc/ftagent/config.json
+python3 -m flowtriq_migrate corero-api-export.json --vendor corero
 ```
 
-### Dry run (preview without writing)
+### Other options
 
 ```bash
-flowtriq-migrate /etc/fastnetmon.conf --dry-run
+# Pre-fill Flowtriq credentials
+python3 -m flowtriq_migrate config.conf --api-key "your-key" --node-uuid "your-uuid"
+
+# Dry run (preview without writing a file)
+python3 -m flowtriq_migrate config.conf --dry-run
+
+# Specify networks file manually
+python3 -m flowtriq_migrate config.conf --networks-file ./my-networks.txt
 ```
 
-### Specify networks file manually
-
-If your `networks_list` file is on a different machine:
-
-```bash
-flowtriq-migrate /etc/fastnetmon.conf --networks-file ./my-networks.txt
-```
-
-### FastNetMon Advanced (JSON config)
-
-```bash
-flowtriq-migrate /etc/fastnetmon-advanced.json
-```
-
-The tool auto-detects the config format.
+The tool auto-detects the platform from the config format. Use `--vendor` to override.
 
 ## Example Output
 
@@ -177,25 +189,29 @@ Full migration guide: [flowtriq.com/blog/migrate-from-fastnetmon-to-flowtriq](ht
 
 ## FAQ
 
-### Does this work with FastNetMon Community (free edition)?
+### Which platforms are supported?
 
-Yes. The tool parses the standard `/etc/fastnetmon.conf` INI-style configuration used by FastNetMon Community.
+FastNetMon (Community INI config and Advanced JSON config), Andrisoft Wanguard (JSON export from Console), and Corero SmartWall (REST API JSON export). The tool auto-detects the format or you can specify `--vendor`.
 
-### Does this work with FastNetMon Advanced?
+### How do I export my Wanguard config?
 
-Yes. FastNetMon Advanced configs (JSON format) are auto-detected and parsed. Advanced-specific features like per-host thresholds, email alerts, and InfluxDB export are mapped with migration guidance.
+Wanguard stores configuration in its web Console database. Create a JSON file with your sensor settings, thresholds, networks, BGP config, and alert channels. See `examples/wanguard-export.json` for the exact format.
 
-### Do I need to stop FastNetMon first?
+### How do I export my Corero config?
 
-No. Run both systems in parallel while Flowtriq learns your traffic baselines (24-72 hours). Decommission FastNetMon only after you've validated Flowtriq's detection and alerting.
+Query the CMS REST API endpoints (`/api/v1/protection-profiles/`, `/api/v1/managed-objects/`, `/api/v1/smart-rules/`) and combine the responses into a single JSON file. See `examples/corero-api-export.json` for the format.
+
+### Do I need to stop my current platform first?
+
+No. Run both systems in parallel while Flowtriq learns your traffic baselines (24-72 hours). Decommission your old platform only after you've validated Flowtriq's detection and alerting.
 
 ### What about my BGP blackhole setup?
 
 Your BGP sessions stay unchanged. Flowtriq supports ExaBGP, GoBGP, BIRD 2, and FRRouting as BGP adapters. Configure the BGP peer in the Flowtriq dashboard and Flowtriq orchestrates announcements through the same sessions.
 
-### What if I use sFlow or NetFlow?
+### Corero is inline hardware. How does Flowtriq replace it?
 
-Both are fully supported. The tool maps your sFlow/NetFlow collection settings directly to Flowtriq's flow collector configuration. Flowtriq can also run in per-packet agent mode alongside flow collection for combined visibility.
+Flowtriq deploys lightweight agents on your servers instead of inline appliances. Detection happens per-packet at the kernel level. Mitigation uses iptables/nftables/XDP locally, plus BGP FlowSpec/RTBH for upstream filtering. No dedicated hardware required.
 
 ### Is this tool open source?
 

@@ -156,5 +156,75 @@ class TestCredentialOverride(unittest.TestCase):
         self.assertEqual(config["node_uuid"], "my-uuid")
 
 
+class TestWanguardMapping(unittest.TestCase):
+    def setUp(self):
+        parsed = parse_config(os.path.join(FIXTURES, "wanguard_basic.json"))
+        self.config, self.notes = map_to_flowtriq(parsed)
+
+    def test_interface_mapped(self):
+        self.assertEqual(self.config["interface"], "eth0")
+
+    def test_flow_enabled(self):
+        self.assertTrue(self.config["flow_enabled"])
+        self.assertEqual(self.config["flow_protocol"], "netflow_v5")
+        self.assertEqual(self.config["flow_port"], 2055)
+
+    def test_dynamic_threshold(self):
+        self.assertTrue(self.config["dynamic_threshold"])
+
+    def test_all_keys_present(self):
+        for key in FLOWTRIQ_DEFAULTS:
+            self.assertIn(key, self.config)
+
+    def test_has_wanguard_notes(self):
+        all_msgs = " ".join(n["message"] for n in self.notes)
+        self.assertIn("Wanguard", all_msgs)
+
+    def test_snmp_note(self):
+        manual = [n for n in self.notes if n["type"] == "manual"]
+        snmp_notes = [n for n in manual if "SNMP" in n["message"]]
+        self.assertGreater(len(snmp_notes), 0)
+
+
+class TestCoreroMapping(unittest.TestCase):
+    def setUp(self):
+        parsed = parse_config(os.path.join(FIXTURES, "corero_basic.json"))
+        self.config, self.notes = map_to_flowtriq(parsed)
+
+    def test_interface_mapped(self):
+        self.assertEqual(self.config["interface"], "eth0")
+
+    def test_agent_mode(self):
+        # Corero is inline, so no flow/mirror -- defaults to agent mode
+        self.assertFalse(self.config["flow_enabled"])
+        self.assertFalse(self.config["mirror_mode"])
+
+    def test_networks_from_managed_objects(self):
+        # Networks should be noted but not in mirror_subnets (not mirror mode)
+        info = [n for n in self.notes if n["type"] == "info"]
+        net_notes = [n for n in info if "managed object" in n["message"].lower()]
+        self.assertGreater(len(net_notes), 0)
+
+    def test_has_corero_notes(self):
+        all_msgs = " ".join(n["message"] for n in self.notes)
+        self.assertIn("Corero", all_msgs)
+        self.assertIn("inline", all_msgs.lower())
+
+    def test_bgp_flowspec_note(self):
+        manual = [n for n in self.notes if n["type"] == "manual"]
+        bgp_notes = [n for n in manual if "FlowSpec" in n["message"]]
+        self.assertGreater(len(bgp_notes), 0)
+
+    def test_syslog_note(self):
+        manual = [n for n in self.notes if n["type"] == "manual"]
+        syslog_notes = [n for n in manual if "Syslog" in n["message"]]
+        self.assertGreater(len(syslog_notes), 0)
+
+    def test_webhook_note(self):
+        manual = [n for n in self.notes if n["type"] == "manual"]
+        webhook_notes = [n for n in manual if "webhook" in n["message"].lower() or "Webhook" in n["message"]]
+        self.assertGreater(len(webhook_notes), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

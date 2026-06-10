@@ -1,0 +1,32 @@
+{
+  "vendor": "corero",
+  "deployment_mode": "inline",
+  "interfaces": ["eth0", "eth1"],
+  "protection_profiles": [
+    {
+      "name": "default",
+      "smart_rules": [
+        {"type": "service", "protocol": "udp", "threshold_pps": 50000, "rate_limit_pps": 0, "action": "drop"},
+        {"type": "service", "protocol": "tcp", "threshold_pps": 100000, "rate_limit_pps": 0, "action": "drop"},
+        {"type": "reflection", "protocol": "udp", "threshold_pps": 30000, "action": "drop"}
+      ]
+    }
+  ],
+  "managed_objects": [
+    {"name": "Web Servers", "prefixes": ["10.0.0.0/24"], "profile": "default"},
+    {"name": "DNS", "prefixes": ["10.0.1.0/24"], "profile": "default"}
+  ],
+  "bgp": {
+    "enabled": true,
+    "type": "flowspec",
+    "community": "65001:999",
+    "next_hop": "10.0.0.1",
+    "peer": "10.0.0.254"
+  },
+  "alerts": {
+    "syslog": {"enabled": true, "host": "10.0.0.50", "port": 514},
+    "snmp": {"enabled": true, "host": "10.0.0.50", "community": "public"},
+    "email": "noc@example.com",
+    "webhook": "https://hooks.example.com/ddos-alerts"
+  }
+}

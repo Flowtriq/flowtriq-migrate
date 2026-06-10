@@ -1,4 +1,4 @@
-"""Parse FastNetMon Community and Advanced configuration files."""
+"""Parse DDoS platform configuration files (FastNetMon, Wanguard, Corero)."""
 
 from __future__ import annotations
 
@@ -7,25 +7,76 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
+# Vendor constants
+VENDOR_FASTNETMON = "fastnetmon"
+VENDOR_WANGUARD = "wanguard"
+VENDOR_CORERO = "corero"
 
-def parse_config(path: str, networks_file: Optional[str] = None) -> Dict[str, Any]:
-    """Parse a FastNetMon config file and return a normalized dict.
 
-    Auto-detects Community (INI-style key=value) vs Advanced (JSON) format.
+def parse_config(
+    path: str,
+    networks_file: Optional[str] = None,
+    vendor: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Parse a DDoS platform config file and return a normalized dict.
+
+    Supports FastNetMon (Community INI / Advanced JSON), Wanguard (JSON export),
+    and Corero SmartWall (JSON API export).
+
+    If vendor is None, auto-detects the platform from the file contents.
     """
     with open(path, "r") as f:
         raw = f.read()
 
-    # Try JSON first (Advanced edition stores config as JSON)
+    # Explicit vendor override
+    if vendor:
+        v = vendor.lower().replace(" ", "").replace("-", "").replace("_", "")
+        if v in ("wanguard", "andrisoft"):
+            data = json.loads(raw)
+            return _normalize_wanguard(data, path, networks_file)
+        elif v in ("corero", "smartwall"):
+            data = json.loads(raw)
+            return _normalize_corero(data, path)
+        elif v in ("fastnetmon", "fnm"):
+            pass  # fall through to FastNetMon auto-detect
+        else:
+            pass  # unknown vendor, try auto-detect
+
+    # Try JSON first
     try:
         data = json.loads(raw)
         if isinstance(data, dict):
-            return _normalize_advanced(data, path, networks_file)
+            # Detect vendor from JSON structure
+            detected = _detect_json_vendor(data)
+            if detected == VENDOR_WANGUARD:
+                return _normalize_wanguard(data, path, networks_file)
+            elif detected == VENDOR_CORERO:
+                return _normalize_corero(data, path)
+            else:
+                return _normalize_advanced(data, path, networks_file)
     except (json.JSONDecodeError, ValueError):
         pass
 
-    # Fall back to INI-style key=value (Community edition)
+    # Fall back to INI-style key=value (FastNetMon Community)
     return _normalize_community(raw, path, networks_file)
+
+
+def _detect_json_vendor(data: Dict[str, Any]) -> str:
+    """Detect vendor from JSON config structure."""
+    # Wanguard: has "vendor": "wanguard" or sensor/filter/console keys
+    if data.get("vendor", "").lower() in ("wanguard", "andrisoft"):
+        return VENDOR_WANGUARD
+    if any(k in data for k in ("sensors", "filters", "anomaly_profiles", "sensor_type")):
+        return VENDOR_WANGUARD
+
+    # Corero: has "vendor": "corero" or protection_profiles/smart_rules/managed_objects
+    if data.get("vendor", "").lower() in ("corero", "smartwall"):
+        return VENDOR_CORERO
+    if any(k in data for k in ("protection_profiles", "smart_rules", "managed_objects")):
+        return VENDOR_CORERO
+
+    # Default: FastNetMon Advanced
+    return VENDOR_FASTNETMON
 
 
 # ---------------------------------------------------------------------------
@@ -327,5 +378,324 @@ def _normalize_advanced(
         "announce_port": gobgp.get("announce_port", 50051),
         "community": str(gobgp.get("community", "")),
     }
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Wanguard (Andrisoft) parser
+# ---------------------------------------------------------------------------
+# Wanguard stores config in a database behind a web console. There is no
+# standard config file. We accept a JSON document that operators fill in
+# from their Console settings, or export via database queries.
+#
+# Expected JSON structure:
+# {
+#   "vendor": "wanguard",
+#   "sensors": [{"type": "netflow"|"sflow"|"packet", "interface": "...", "port": 2055}],
+#   "thresholds": {"pps": 50000, "mbps": 2048},
+#   "networks": ["10.0.0.0/24"],
+#   "bgp": {"enabled": true, "community": "65001:666", "next_hop": "192.0.2.1"},
+#   "alerts": {"email": "noc@example.com", "snmp_trap": "10.0.0.50", "script": "/path"},
+#   "anomaly_profiles": [{"name": "default", "threshold_pps": 50000}],
+#   "filter": {"enabled": true, "type": "flowspec"|"rtbh"|"iptables"},
+#   "ban_time": 1800
+# }
+
+
+def _normalize_wanguard(
+    data: Dict[str, Any],
+    config_path: str,
+    networks_file: Optional[str],
+) -> Dict[str, Any]:
+    """Normalize Wanguard JSON export into the standard parsed structure."""
+    config_dir = os.path.dirname(os.path.abspath(config_path))
+    result: Dict[str, Any] = {"edition": "wanguard", "_raw": data}
+
+    # Sensors -> interfaces and collection
+    sensors = data.get("sensors", [])
+    ifaces = []
+    coll = {
+        "mirror": False, "mirror_afpacket": False, "mirror_netmap": False,
+        "netflow": False, "sflow": False,
+        "netflow_port": 2055, "sflow_port": 6343,
+        "netflow_host": "0.0.0.0", "sflow_host": "0.0.0.0",
+    }
+    for sensor in sensors:
+        stype = str(sensor.get("type", sensor.get("sensor_type", ""))).lower()
+        iface = sensor.get("interface", "")
+        if iface and iface not in ifaces:
+            ifaces.append(iface)
+        if stype in ("netflow", "netflow_v5", "netflow_v9", "ipfix"):
+            coll["netflow"] = True
+            coll["netflow_port"] = sensor.get("port", sensor.get("listen_port", 2055))
+        elif stype == "sflow":
+            coll["sflow"] = True
+            coll["sflow_port"] = sensor.get("port", sensor.get("listen_port", 6343))
+        elif stype in ("packet", "packet_capture", "pf_ring", "dpdk", "af_packet"):
+            coll["mirror"] = True
+            coll["mirror_afpacket"] = True
+
+    # If no sensors defined, check top-level sensor_type
+    if not sensors:
+        stype = str(data.get("sensor_type", "")).lower()
+        if stype in ("netflow", "netflow_v5", "netflow_v9", "ipfix"):
+            coll["netflow"] = True
+            coll["netflow_port"] = data.get("netflow_port", data.get("listen_port", 2055))
+        elif stype == "sflow":
+            coll["sflow"] = True
+            coll["sflow_port"] = data.get("sflow_port", data.get("listen_port", 6343))
+        elif stype in ("packet", "pf_ring", "dpdk"):
+            coll["mirror"] = True
+            coll["mirror_afpacket"] = True
+
+    iface_str = data.get("interface", data.get("interfaces", ""))
+    if isinstance(iface_str, str) and iface_str and iface_str not in ifaces:
+        ifaces.append(iface_str)
+    elif isinstance(iface_str, list):
+        for i in iface_str:
+            if i not in ifaces:
+                ifaces.append(i)
+
+    result["interfaces"] = ifaces
+    result["collection"] = coll
+
+    # Thresholds
+    thresh = data.get("thresholds", {})
+    if not thresh:
+        # Try anomaly_profiles
+        profiles = data.get("anomaly_profiles", [])
+        if profiles:
+            p = profiles[0] if isinstance(profiles, list) else profiles
+            thresh = {
+                "pps": p.get("threshold_pps", p.get("pps", 0)),
+                "mbps": p.get("threshold_mbps", p.get("mbps", 0)),
+            }
+    result["thresholds"] = {
+        "pps": thresh.get("pps", thresh.get("threshold_pps", 0)),
+        "mbps": thresh.get("mbps", thresh.get("threshold_mbps", 0)),
+        "flows": thresh.get("flows", 0),
+    }
+
+    # Ban / mitigation (Wanguard Filter)
+    filt = data.get("filter", {})
+    result["ban"] = {
+        "enabled": filt.get("enabled", bool(filt)),
+        "time": data.get("ban_time", filt.get("ban_time", 1800)),
+        "unban_only_if_attack_finished": False,
+    }
+    result["filter_type"] = filt.get("type", "")
+
+    # Networks
+    nets = data.get("networks", data.get("subnets", data.get("prefixes", [])))
+    if isinstance(nets, str):
+        nets = [s.strip() for s in nets.split(",") if s.strip()]
+    nets_from_file = []
+    if networks_file:
+        nets_from_file = _read_networks_file(networks_file)
+    elif not nets:
+        npath = data.get("networks_file", "")
+        if npath:
+            if not os.path.isabs(npath):
+                npath = os.path.join(config_dir, npath)
+            nets_from_file = _read_networks_file(npath)
+    result["networks"] = nets or nets_from_file
+    result["networks_list_path"] = ""
+
+    # Notification / alerts
+    alerts = data.get("alerts", data.get("notifications", {}))
+    result["notify_script"] = str(alerts.get("script", ""))
+    if alerts.get("email"):
+        result["email"] = {
+            "enabled": True,
+            "to": alerts["email"],
+            "from": alerts.get("from", ""),
+            "smtp_host": alerts.get("smtp_host", alerts.get("smtp", "")),
+            "smtp_port": alerts.get("smtp_port", 25),
+        }
+    if alerts.get("snmp_trap"):
+        result["snmp"] = {
+            "enabled": True,
+            "host": alerts["snmp_trap"],
+            "community": alerts.get("snmp_community", "public"),
+        }
+
+    # BGP
+    bgp = data.get("bgp", {})
+    result["exabgp"] = {
+        "enabled": bgp.get("enabled", False),
+        "community": str(bgp.get("community", "")),
+        "next_hop": str(bgp.get("next_hop", "")),
+        "announce_host": str(bgp.get("announce_host", bgp.get("peer", ""))),
+        "announce_port": bgp.get("announce_port", bgp.get("port", 5555)),
+    }
+    result["gobgp"] = {"enabled": False}
+    result["graphite"] = {"enabled": False}
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Corero SmartWall parser
+# ---------------------------------------------------------------------------
+# Corero configs come from the CMS REST API (JSON) or CLI show commands.
+# We accept JSON from the API or a structured JSON export.
+#
+# Expected JSON structure:
+# {
+#   "vendor": "corero",
+#   "protection_profiles": [
+#     {
+#       "name": "default",
+#       "smart_rules": [
+#         {"type": "service"|"reflection"|"server", "protocol": "udp",
+#          "threshold_pps": 50000, "rate_limit_pps": 0, "action": "drop"}
+#       ]
+#     }
+#   ],
+#   "managed_objects": [
+#     {"name": "Web Servers", "prefixes": ["10.0.0.0/24"], "profile": "default"}
+#   ],
+#   "deployment_mode": "inline"|"out_of_band",
+#   "interfaces": ["eth0", "eth1"],
+#   "bgp": {"enabled": true, "type": "rtbh"|"flowspec", "community": "65001:666",
+#           "next_hop": "192.0.2.1", "peer": "10.0.0.1"},
+#   "alerts": {
+#     "syslog": {"enabled": true, "host": "10.0.0.50", "port": 514},
+#     "snmp": {"enabled": true, "host": "10.0.0.50", "community": "public"},
+#     "email": "noc@example.com",
+#     "webhook": "https://hooks.example.com/alerts"
+#   }
+# }
+
+
+def _normalize_corero(
+    data: Dict[str, Any],
+    config_path: str,
+) -> Dict[str, Any]:
+    """Normalize Corero SmartWall JSON export into the standard parsed structure."""
+    result: Dict[str, Any] = {"edition": "corero", "_raw": data}
+
+    # Interfaces
+    ifaces = data.get("interfaces", [])
+    if isinstance(ifaces, str):
+        ifaces = [s.strip() for s in ifaces.split(",") if s.strip()]
+    result["interfaces"] = ifaces
+
+    # Deployment mode
+    result["deployment_mode"] = data.get("deployment_mode", "inline")
+
+    # Collection -- Corero is inline hardware, not flow-based
+    result["collection"] = {
+        "mirror": False, "mirror_afpacket": False, "mirror_netmap": False,
+        "netflow": False, "sflow": False,
+        "netflow_port": 2055, "sflow_port": 6343,
+        "netflow_host": "0.0.0.0", "sflow_host": "0.0.0.0",
+        "inline": result["deployment_mode"] == "inline",
+    }
+
+    # Protection profiles -> thresholds
+    profiles = data.get("protection_profiles", [])
+    rules = []
+    max_pps = 0
+    max_mbps = 0
+    for profile in profiles:
+        smart_rules = profile.get("smart_rules", profile.get("rules", []))
+        for rule in smart_rules:
+            rules.append(rule)
+            pps = rule.get("threshold_pps", rule.get("threshold", 0))
+            mbps = rule.get("threshold_mbps", 0)
+            if pps > max_pps:
+                max_pps = pps
+            if mbps > max_mbps:
+                max_mbps = mbps
+
+    result["thresholds"] = {
+        "pps": max_pps or data.get("threshold_pps", 0),
+        "mbps": max_mbps or data.get("threshold_mbps", 0),
+        "flows": 0,
+    }
+    result["protection_profiles"] = profiles
+    result["smart_rules_count"] = len(rules)
+
+    # Managed objects -> networks
+    managed = data.get("managed_objects", [])
+    networks = []
+    for obj in managed:
+        prefixes = obj.get("prefixes", obj.get("networks", obj.get("subnets", [])))
+        if isinstance(prefixes, str):
+            prefixes = [prefixes]
+        networks.extend(prefixes)
+    if not networks:
+        networks = data.get("networks", data.get("prefixes", []))
+        if isinstance(networks, str):
+            networks = [s.strip() for s in networks.split(",") if s.strip()]
+    result["networks"] = networks
+    result["networks_list_path"] = ""
+    result["managed_objects_count"] = len(managed)
+
+    # Ban / mitigation
+    has_drop = any(
+        r.get("action", "").lower() in ("drop", "rate-limit", "rate_limit", "police")
+        for r in rules
+    )
+    result["ban"] = {
+        "enabled": has_drop,
+        "time": data.get("ban_time", 0),
+        "unban_only_if_attack_finished": False,
+    }
+
+    # Alerts
+    alerts = data.get("alerts", data.get("notifications", {}))
+    result["notify_script"] = ""
+
+    if isinstance(alerts, dict):
+        # Syslog
+        syslog = alerts.get("syslog", {})
+        if syslog and syslog.get("enabled", True):
+            result["syslog"] = {
+                "enabled": True,
+                "host": syslog.get("host", ""),
+                "port": syslog.get("port", 514),
+            }
+
+        # SNMP
+        snmp = alerts.get("snmp", {})
+        if snmp and snmp.get("enabled", True):
+            result["snmp"] = {
+                "enabled": True,
+                "host": snmp.get("host", ""),
+                "community": snmp.get("community", "public"),
+            }
+
+        # Email
+        email_val = alerts.get("email", "")
+        if email_val:
+            addr = email_val if isinstance(email_val, str) else email_val.get("to", "")
+            result["email"] = {
+                "enabled": True,
+                "to": addr,
+                "from": "",
+                "smtp_host": "",
+                "smtp_port": 25,
+            }
+
+        # Webhook
+        webhook = alerts.get("webhook", "")
+        if webhook:
+            result["webhook"] = webhook
+
+    # BGP
+    bgp = data.get("bgp", {})
+    result["exabgp"] = {
+        "enabled": bgp.get("enabled", False),
+        "community": str(bgp.get("community", "")),
+        "next_hop": str(bgp.get("next_hop", "")),
+        "announce_host": str(bgp.get("peer", bgp.get("announce_host", ""))),
+        "announce_port": bgp.get("port", bgp.get("announce_port", 179)),
+    }
+    result["bgp_type"] = bgp.get("type", "")  # "rtbh" or "flowspec"
+    result["gobgp"] = {"enabled": False}
+    result["graphite"] = {"enabled": False}
 
     return result

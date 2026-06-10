@@ -159,6 +159,118 @@ class TestEmptyConfig(unittest.TestCase):
         self.assertEqual(parsed["thresholds"]["pps"], 0)
 
 
+class TestWanguardParser(unittest.TestCase):
+    def setUp(self):
+        self.parsed = parse_config(
+            os.path.join(FIXTURES, "wanguard_basic.json"),
+        )
+
+    def test_edition(self):
+        self.assertEqual(self.parsed["edition"], "wanguard")
+
+    def test_interfaces(self):
+        self.assertEqual(self.parsed["interfaces"], ["eth0"])
+
+    def test_thresholds(self):
+        self.assertEqual(self.parsed["thresholds"]["pps"], 100000)
+        self.assertEqual(self.parsed["thresholds"]["mbps"], 5000)
+
+    def test_netflow_collection(self):
+        self.assertTrue(self.parsed["collection"]["netflow"])
+        self.assertEqual(self.parsed["collection"]["netflow_port"], 2055)
+
+    def test_networks(self):
+        self.assertEqual(self.parsed["networks"], ["10.0.0.0/24", "172.16.0.0/16"])
+
+    def test_bgp(self):
+        self.assertTrue(self.parsed["exabgp"]["enabled"])
+        self.assertEqual(self.parsed["exabgp"]["community"], "65001:666")
+
+    def test_ban(self):
+        self.assertTrue(self.parsed["ban"]["enabled"])
+        self.assertEqual(self.parsed["ban"]["time"], 1800)
+
+    def test_filter_type(self):
+        self.assertEqual(self.parsed["filter_type"], "flowspec")
+
+    def test_snmp(self):
+        self.assertTrue(self.parsed["snmp"]["enabled"])
+        self.assertEqual(self.parsed["snmp"]["host"], "10.0.0.50")
+
+    def test_email(self):
+        self.assertTrue(self.parsed["email"]["enabled"])
+        self.assertEqual(self.parsed["email"]["to"], "noc@example.com")
+
+
+class TestCorero(unittest.TestCase):
+    def setUp(self):
+        self.parsed = parse_config(
+            os.path.join(FIXTURES, "corero_basic.json"),
+        )
+
+    def test_edition(self):
+        self.assertEqual(self.parsed["edition"], "corero")
+
+    def test_interfaces(self):
+        self.assertEqual(self.parsed["interfaces"], ["eth0", "eth1"])
+
+    def test_deployment_mode(self):
+        self.assertEqual(self.parsed["deployment_mode"], "inline")
+
+    def test_thresholds_from_rules(self):
+        # Should pick the max PPS across all smart rules (100000)
+        self.assertEqual(self.parsed["thresholds"]["pps"], 100000)
+
+    def test_networks_from_managed_objects(self):
+        self.assertIn("10.0.0.0/24", self.parsed["networks"])
+        self.assertIn("10.0.1.0/24", self.parsed["networks"])
+        self.assertEqual(len(self.parsed["networks"]), 2)
+
+    def test_managed_objects_count(self):
+        self.assertEqual(self.parsed["managed_objects_count"], 2)
+
+    def test_smart_rules_count(self):
+        self.assertEqual(self.parsed["smart_rules_count"], 3)
+
+    def test_protection_profiles(self):
+        self.assertEqual(len(self.parsed["protection_profiles"]), 1)
+
+    def test_ban_from_drop_rules(self):
+        self.assertTrue(self.parsed["ban"]["enabled"])
+
+    def test_bgp(self):
+        self.assertTrue(self.parsed["exabgp"]["enabled"])
+        self.assertEqual(self.parsed["exabgp"]["community"], "65001:999")
+        self.assertEqual(self.parsed["bgp_type"], "flowspec")
+
+    def test_syslog(self):
+        self.assertTrue(self.parsed["syslog"]["enabled"])
+        self.assertEqual(self.parsed["syslog"]["host"], "10.0.0.50")
+
+    def test_webhook(self):
+        self.assertEqual(self.parsed["webhook"], "https://hooks.example.com/ddos-alerts")
+
+    def test_email(self):
+        self.assertTrue(self.parsed["email"]["enabled"])
+
+
+class TestVendorDetection(unittest.TestCase):
+    def test_wanguard_auto_detected(self):
+        parsed = parse_config(os.path.join(FIXTURES, "wanguard_basic.json"))
+        self.assertEqual(parsed["edition"], "wanguard")
+
+    def test_corero_auto_detected(self):
+        parsed = parse_config(os.path.join(FIXTURES, "corero_basic.json"))
+        self.assertEqual(parsed["edition"], "corero")
+
+    def test_vendor_override(self):
+        # Force wanguard parsing even with vendor flag
+        parsed = parse_config(
+            os.path.join(FIXTURES, "wanguard_basic.json"), vendor="wanguard"
+        )
+        self.assertEqual(parsed["edition"], "wanguard")
+
+
 class TestBooleanParsing(unittest.TestCase):
     def test_various_booleans(self):
         content = (

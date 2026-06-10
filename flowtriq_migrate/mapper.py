@@ -1,9 +1,16 @@
-"""Map parsed FastNetMon config to a Flowtriq ftagent configuration."""
+"""Map parsed DDoS platform config to a Flowtriq ftagent configuration."""
 
 from __future__ import annotations
 
 import copy
 from typing import Any, Dict, List, Tuple
+
+_VENDOR_LABELS = {
+    "community": "FastNetMon Community",
+    "advanced": "FastNetMon Advanced",
+    "wanguard": "Wanguard",
+    "corero": "Corero SmartWall",
+}
 
 # Flowtriq ftagent default config — mirrors ftagent/agent.py DEFAULT_CONFIG
 FLOWTRIQ_DEFAULTS = {
@@ -45,13 +52,16 @@ def map_to_flowtriq(
     api_key: str = "",
     node_uuid: str = "",
 ) -> Tuple[Dict[str, Any], List[Dict[str, str]]]:
-    """Convert parsed FastNetMon config to a Flowtriq ftagent config.
+    """Convert parsed DDoS platform config to a Flowtriq ftagent config.
 
     Returns (config_dict, notes) where notes is a list of
     {"type": "mapped"|"manual"|"info", "message": str} entries.
     """
     config = copy.deepcopy(FLOWTRIQ_DEFAULTS)
     notes: List[Dict[str, str]] = []
+
+    edition = parsed.get("edition", "unknown")
+    vendor = _VENDOR_LABELS.get(edition, edition.title())
 
     # Credentials
     config["api_key"] = api_key or "YOUR_API_KEY_HERE"
@@ -69,7 +79,7 @@ def map_to_flowtriq(
             notes.append({
                 "type": "info",
                 "message": (
-                    f"FastNetMon had {len(interfaces)} interfaces configured "
+                    f"{vendor} had {len(interfaces)} interfaces configured "
                     f"({', '.join(interfaces)}). Flowtriq uses one agent per "
                     "server — deploy ftagent on each server individually."
                 ),
@@ -114,7 +124,7 @@ def map_to_flowtriq(
             notes.append({
                 "type": "info",
                 "message": (
-                    "FastNetMon netmap mode detected. Flowtriq uses AF_PACKET "
+                    "Netmap mode detected. Flowtriq uses AF_PACKET "
                     "for mirror capture, which provides comparable performance "
                     "without kernel module dependencies."
                 ),
@@ -167,8 +177,8 @@ def map_to_flowtriq(
         notes.append({
             "type": "mapped",
             "message": (
-                f"FastNetMon static thresholds: {', '.join(threshold_parts)}. "
-                "Flowtriq uses adaptive baselining instead — the agent learns "
+                f"{vendor} static thresholds: {', '.join(threshold_parts)}. "
+                "Flowtriq uses adaptive baselining instead -- the agent learns "
                 "your normal traffic pattern and alerts at 3.0x baseline. This "
                 "eliminates false positives from legitimate traffic spikes and "
                 "catches attacks that stay below a static threshold."
@@ -179,9 +189,9 @@ def map_to_flowtriq(
         notes.append({
             "type": "info",
             "message": (
-                "Flow-count threshold (ban_for_flows) has no direct Flowtriq "
-                "equivalent. Flowtriq's per-packet analysis provides deeper "
-                "visibility than flow counting."
+                "Flow-count threshold has no direct Flowtriq equivalent. "
+                "Flowtriq's per-packet analysis provides deeper visibility "
+                "than flow counting."
             ),
         })
 
@@ -191,7 +201,7 @@ def map_to_flowtriq(
         notes.append({
             "type": "manual",
             "message": (
-                "FastNetMon ban/mitigation was enabled "
+                f"{vendor} mitigation was enabled "
                 f"(ban_time: {ban.get('time', 1900)}s). Configure "
                 "auto-mitigation rules in your Flowtriq dashboard: "
                 "iptables, nftables, XDP/eBPF, BGP FlowSpec, or RTBH."
@@ -204,7 +214,7 @@ def map_to_flowtriq(
         notes.append({
             "type": "manual",
             "message": (
-                f"FastNetMon notify script: {notify}\n"
+                f"Notify script: {notify}\n"
                 "     Configure alert channels in your Flowtriq dashboard:\n"
                 "     Slack, Discord, PagerDuty, OpsGenie, email, SMS, "
                 "Telegram, webhook, and more."
@@ -283,10 +293,105 @@ def map_to_flowtriq(
             "type": "info",
             "message": (
                 f"Per-host threshold groups detected ({len(hostgroups)} groups). "
-                "Flowtriq supports per-node thresholds natively — each server "
+                "Flowtriq supports per-node thresholds natively -- each server "
                 "runs its own agent with independent baselines."
             ),
         })
+
+    # --- Wanguard-specific ---
+    if edition == "wanguard":
+        filter_type = parsed.get("filter_type", "")
+        if filter_type:
+            notes.append({
+                "type": "info",
+                "message": (
+                    f"Wanguard Filter type: {filter_type}. Flowtriq supports "
+                    "iptables, nftables, XDP/eBPF, BGP FlowSpec, and RTBH "
+                    "mitigation -- configure in the dashboard."
+                ),
+            })
+        snmp = parsed.get("snmp", {})
+        if snmp.get("enabled"):
+            notes.append({
+                "type": "manual",
+                "message": (
+                    f"SNMP trap receiver at {snmp.get('host', '')} detected. "
+                    "Flowtriq supports webhook alerts for SNMP-to-webhook "
+                    "bridging, plus 12+ native alert channels."
+                ),
+            })
+
+    # --- Corero-specific ---
+    if edition == "corero":
+        deploy = parsed.get("deployment_mode", "inline")
+        notes.append({
+            "type": "info",
+            "message": (
+                f"Corero SmartWall deployment mode: {deploy}. Flowtriq replaces "
+                "inline hardware with per-server agents + upstream BGP "
+                "automation. No appliance hardware required."
+            ),
+        })
+        profiles = parsed.get("protection_profiles", [])
+        rule_count = parsed.get("smart_rules_count", 0)
+        if profiles:
+            names = [p.get("name", "unnamed") for p in profiles]
+            notes.append({
+                "type": "info",
+                "message": (
+                    f"Protection profiles: {', '.join(names)} "
+                    f"({rule_count} Smart-Rules total). Flowtriq uses adaptive "
+                    "baselines per server instead of static rule sets -- "
+                    "attacks are classified automatically across 8+ families."
+                ),
+            })
+        managed = parsed.get("managed_objects_count", 0)
+        if managed:
+            notes.append({
+                "type": "info",
+                "message": (
+                    f"{managed} managed object(s) detected. Each managed "
+                    "prefix maps to one or more Flowtriq agent deployments."
+                ),
+            })
+        bgp_type = parsed.get("bgp_type", "")
+        if bgp_type:
+            notes.append({
+                "type": "manual",
+                "message": (
+                    f"Corero BGP type: {bgp_type.upper()}. Configure "
+                    f"{'FlowSpec' if bgp_type == 'flowspec' else 'RTBH'} "
+                    "mitigation in your Flowtriq dashboard."
+                ),
+            })
+        syslog = parsed.get("syslog", {})
+        if syslog.get("enabled"):
+            notes.append({
+                "type": "manual",
+                "message": (
+                    f"Syslog alerts to {syslog.get('host', '')}:{syslog.get('port', 514)} "
+                    "detected. Flowtriq supports webhook alerts for syslog "
+                    "integration, plus 12+ native channels."
+                ),
+            })
+        snmp = parsed.get("snmp", {})
+        if snmp.get("enabled"):
+            notes.append({
+                "type": "manual",
+                "message": (
+                    f"SNMP trap receiver at {snmp.get('host', '')} detected. "
+                    "Configure webhook or native alert channels in Flowtriq."
+                ),
+            })
+        webhook = parsed.get("webhook", "")
+        if webhook:
+            notes.append({
+                "type": "manual",
+                "message": (
+                    f"Webhook endpoint: {webhook}. Add this as a webhook "
+                    "alert channel in your Flowtriq dashboard."
+                ),
+            })
 
     # --- Strip internal keys from output ---
     output = {k: v for k, v in config.items() if not k.startswith("_")}

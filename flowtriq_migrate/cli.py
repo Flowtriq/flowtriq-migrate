@@ -16,16 +16,17 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="flowtriq-migrate",
         description=(
-            "Migrate from FastNetMon to Flowtriq in under 5 minutes.\n"
-            "Reads a FastNetMon Community or Advanced config file and outputs "
-            "a working Flowtriq agent configuration."
+            "Migrate to Flowtriq from FastNetMon, Wanguard, or Corero.\n"
+            "Reads your existing DDoS platform config and outputs a working "
+            "Flowtriq agent configuration."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
             "  flowtriq-migrate /etc/fastnetmon.conf\n"
-            "  flowtriq-migrate /etc/fastnetmon.conf -o /etc/ftagent/config.json\n"
-            "  flowtriq-migrate config.conf --api-key abc123 --node-uuid xyz789\n"
+            "  flowtriq-migrate wanguard-export.json --vendor wanguard\n"
+            "  flowtriq-migrate corero-api-export.json --vendor corero\n"
+            "  flowtriq-migrate config.conf -o /etc/ftagent/config.json\n"
             "  flowtriq-migrate config.conf --dry-run\n"
             "\n"
             "Get your API key and Node UUID at: https://flowtriq.com/dashboard\n"
@@ -34,7 +35,7 @@ def main(argv=None):
     )
     parser.add_argument(
         "config_file",
-        help="Path to your FastNetMon configuration file",
+        help="Path to your DDoS platform configuration file",
     )
     parser.add_argument(
         "-o", "--output",
@@ -65,6 +66,15 @@ def main(argv=None):
         help="Print the generated config to stdout instead of writing a file",
     )
     parser.add_argument(
+        "--vendor",
+        default=None,
+        choices=["fastnetmon", "wanguard", "corero"],
+        help=(
+            "Source platform (auto-detected if not specified). "
+            "Use 'wanguard' or 'corero' for JSON export files."
+        ),
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Suppress the migration report; only output the config",
@@ -79,7 +89,7 @@ def main(argv=None):
 
     # Parse the FastNetMon config
     try:
-        parsed = parse_config(args.config_file, args.networks_file)
+        parsed = parse_config(args.config_file, args.networks_file, args.vendor)
     except FileNotFoundError:
         print(f"Error: Config file not found: {args.config_file}", file=sys.stderr)
         sys.exit(1)
