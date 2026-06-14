@@ -105,7 +105,7 @@ def format_report(
         "Per-packet PCAP forensics with automatic pre-attack capture",
         "Adaptive baseline learning (no manual threshold tuning)",
         "Real-time dashboard with attack timelines and drill-down",
-        "12+ native alert channels (Slack, Discord, PagerDuty, email, SMS, ...)",
+        "Alerts wherever your NOC works (Slack, PagerDuty, Discord, SMS, and more)",
         "XDP/eBPF kernel-level filtering for line-rate mitigation",
         "Service port awareness (block attack traffic, keep legitimate ports open)",
     ]

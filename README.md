@@ -76,7 +76,7 @@ Done. Install the Flowtriq agent, paste in your API key, and you're live.
 | L7 detection | No | No | Limited | Yes (HTTP floods, DNS) |
 | Attack classification | Protocol only | Protocol only | Rule-based | 8+ families with confidence |
 | PCAP forensics | No | No | No | Automatic pre-attack capture |
-| Alert channels | Script / email | Email / SNMP / script | Syslog / SNMP / webhook | 12+ native channels |
+| Alert channels | Script / email | Email / SNMP / script | Syslog / SNMP / webhook | Alerts wherever your NOC works (Slack, PagerDuty, Discord, SMS, and more) |
 | Dashboard | None / LiveView | Web Console | CMS Web UI | Included (unlimited users) |
 | Per-host thresholds | Advanced only | Per-sensor | Per-managed-object | Automatic per-server baselines |
 | BGP FlowSpec | Advanced only | Yes | Yes | Yes |
@@ -163,7 +163,7 @@ Running against a typical FastNetMon Community config:
     - Per-packet PCAP forensics with automatic capture
     - Adaptive baseline learning (no manual threshold tuning)
     - Real-time dashboard with attack timelines
-    - 12+ native alert channels
+    - Alerts wherever your NOC works
     - XDP/eBPF kernel-level filtering
     - Service port awareness
 

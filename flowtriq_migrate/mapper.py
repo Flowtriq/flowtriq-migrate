@@ -317,7 +317,7 @@ def map_to_flowtriq(
                 "message": (
                     f"SNMP trap receiver at {snmp.get('host', '')} detected. "
                     "Flowtriq supports webhook alerts for SNMP-to-webhook "
-                    "bridging, plus 12+ native alert channels."
+                    "bridging, plus alerts wherever your NOC works."
                 ),
             })
 
@@ -371,7 +371,7 @@ def map_to_flowtriq(
                 "message": (
                     f"Syslog alerts to {syslog.get('host', '')}:{syslog.get('port', 514)} "
                     "detected. Flowtriq supports webhook alerts for syslog "
-                    "integration, plus 12+ native channels."
+                    "integration, plus alerts wherever your NOC works."
                 ),
             })
         snmp = parsed.get("snmp", {})
