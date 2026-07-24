@@ -117,7 +117,7 @@ def format_report(
     if output_path:
         lines.append(f"  Config written to: {output_path}")
         lines.append(
-            f"  Next: pip install ftagent && sudo ftagent --test"
+            f"  Next: curl -sSL https://flowtriq.com/install.sh | sudo bash"
         )
     lines.append("")
 

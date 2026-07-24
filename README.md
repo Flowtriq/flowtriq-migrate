@@ -160,18 +160,17 @@ Running against a typical FastNetMon Community config:
     - Service port awareness
 
   Config written to: ./config.json
-  Next: pip install ftagent && sudo ftagent --test
+  Next: curl -sSL https://flowtriq.com/install.sh | sudo bash
 ```
 
 ## After Migration
 
 1. **Install ftagent** on your servers:
    ```bash
-   pip install ftagent
-   sudo ftagent --setup
+   curl -sSL https://flowtriq.com/install.sh | sudo bash
    ```
 
-2. **Run both in parallel** for 24-72 hours while Flowtriq baselines form
+2. **Evaluate Flowtriq** for 24-72 hours before switching while baselines form
 
 3. **Configure alert channels** in the [Flowtriq dashboard](https://flowtriq.com/dashboard) (Slack, Discord, PagerDuty, email, webhook, etc.)
 
@@ -191,7 +190,7 @@ Wanguard stores configuration in its web Console database. Create a JSON file wi
 Query the CMS REST API endpoints (`/api/v1/protection-profiles/`, `/api/v1/managed-objects/`, `/api/v1/smart-rules/`) and combine the responses into a single JSON file. See `examples/corero-api-export.json` for the format.
 
 **Do I need to stop my current platform first?**
-No. Run both systems in parallel while Flowtriq learns your traffic baselines (24-72 hours). Decommission your old platform only after you've validated Flowtriq's detection and alerting.
+No. Evaluate Flowtriq while it learns your traffic baselines (24-72 hours). Decommission your old platform only after you've validated Flowtriq's detection and alerting.
 
 **What about my BGP blackhole setup?**
 Your BGP sessions stay unchanged. Flowtriq supports ExaBGP, GoBGP, BIRD 2, and FRRouting as BGP adapters. Configure the BGP peer in the Flowtriq dashboard and Flowtriq orchestrates announcements through the same sessions.
@@ -201,6 +200,10 @@ Flowtriq deploys lightweight agents on your servers instead of inline appliances
 
 **Is this tool open source?**
 Yes. MIT licensed. Use it, modify it, contribute to it.
+
+## Get Started
+
+Start your free 14-day trial at [flowtriq.com/signup](https://flowtriq.com/signup).
 
 ## Contributing
 
